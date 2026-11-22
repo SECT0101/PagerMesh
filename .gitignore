@@ -1,0 +1,16 @@
+# Local test artifacts
+*.log
+.DS_Store
+__pycache__/
+
+# Generated on the device
+library/**/tiles/
+
+# Web console password hash
+library/**/web/auth
+
+# TAK certificates for the bridge (keep only the README)
+library/**/certs/*.pem
+library/**/certs/*.p12
+library/**/certs/*.key
+library/**/certs/*.crt

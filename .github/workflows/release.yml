@@ -1,0 +1,24 @@
+name: release
+
+# Push a tag like v1.0.0 to publish a release with a ready-to-copy zip of the payload.
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Zip payload
+        run: |
+          set -e
+          mkdir dist
+          (cd library/user/general && zip -qr "$GITHUB_WORKSPACE/dist/PagerMesh-${GITHUB_REF_NAME}.zip" PagerMesh -x '*/web/auth' '*/tiles/*' '*/__pycache__/*')
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          prerelease: ${{ contains(github.ref_name, 'beta') }}

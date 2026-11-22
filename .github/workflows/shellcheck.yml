@@ -1,0 +1,22 @@
+name: shellcheck
+
+on: [push, pull_request]
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck payload
+        run: |
+          find library -name payload.sh -print0 | xargs -0 shellcheck -S warning
+      - name: Python and JavaScript syntax
+        run: |
+          find library tools -name '*.py' -print0 | xargs -0 python3 -m py_compile
+          find library -path '*/web/static/*.js' ! -path '*/leaflet/*' -print0 | xargs -0 -n1 node --check
+      - name: Mesh service against the simulator
+        run: |
+          python3 tools/fake_meshtasticd.py --port 14403 --fast &
+          sleep 2
+          python3 library/user/general/PagerMesh/mesh/pagermesh.py --port 14403 --check | tee /tmp/check
+          grep -q '^OK ' /tmp/check
