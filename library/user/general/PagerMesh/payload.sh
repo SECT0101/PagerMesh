@@ -2,7 +2,7 @@
 # Title: PagerMesh
 # Description: Meshtastic on the Pager - mesh chat, node list and map, Pager GPS position over the mesh, browser web console
 # Author: SECT0101
-# Version: 1.0.0
+# Version: 1.0.1
 # Category: General
 #
 # Core:
@@ -74,7 +74,7 @@ GPS_TIME_SYNC="1"               # 1 = set the clock from GPS if it is clearly wr
 # Internals - no changes needed below this line
 #############################################################################
 
-PAYLOAD_VERSION="1.0.0"
+PAYLOAD_VERSION="1.0.1"
 CFG_NS="pagermesh"
 find_payload_dir() {
     local d
@@ -128,7 +128,7 @@ load_config() {
     C_MAP_SOURCE=$(cfg_get map_source "$MAP_SOURCE")
     C_WEB=$(cfg_get web 0)
     C_WEB_PORT=$(cfg_get web_port "$WEB_PORT")
-    C_WEB_LISTEN=$(cfg_get web_listen pager)     # pager = Pager management network / USB-C only | all
+    C_WEB_LISTEN=$(cfg_get web_listen all)       # all = every address (default) | pager = Pager management network / USB-C only
     C_CONN=$(cfg_get conn "")                    # mod | wifi | usb ("" = not set up yet)
     C_HOST=$(cfg_get conn_host "")
     C_PORT=$(cfg_get conn_port 4403)
@@ -346,7 +346,7 @@ read_gps() {  # sets G_LAT G_LON G_SATS ; returns 1 without a fix
 # Mesh service (mesh/pagermesh.py) and web console
 #############################################################################
 
-# Pager USB / management address (where the web console listens by default)
+# Pager USB / management address (always listed first)
 web_lan_ip() {
     local ip
     ip=$(uci -q get network.lan.ipaddr 2>/dev/null); ip=${ip%%/*}
@@ -506,7 +506,7 @@ check_setup_req() {
 }
 
 # PagerMesh settings the mesh service uses too (RUN/config, key=value)
-APP_KEYS=(manual_pos hide_age dm_alert tak_on tak_proto tak_host tak_port tak_pos tak_chat tak_chan)
+APP_KEYS=(manual_pos hide_age dm_alert tak_on tak_proto tak_host tak_port tak_pos tak_chat tak_chan pos_chan)
 write_app_cfg() {
     local k v out=""
     for k in "${APP_KEYS[@]}"; do
@@ -681,9 +681,17 @@ send_text() {  # send_text "msg" [dest=all|!nodeid] [channel]
 }
 
 # Channel picker: sets CH_IDX CH_NAME (only asks when there is more than one channel)
-pick_channel() {
-    local names=() idx=() line i n r
-    while IFS='|' read -r i n; do [ -n "$i" ] && { idx+=("$i"); names+=("$i: $n"); }; done < "$RUN/channels" 2>/dev/null
+pick_channel() {   # optional "private": only channels with their own key
+    local names=() idx=() line i n k r
+    while IFS='|' read -r i n k; do
+        [ -n "$i" ] || continue
+        [ "$1" = private ] && [ "$k" != private ] && continue
+        idx+=("$i"); names+=("$i: $n")
+    done < "$RUN/channels" 2>/dev/null
+    if [ "$1" = private ] && [ ${#names[@]} -eq 0 ]; then
+        ERROR_DIALOG "No channel with its own key. Channel 0 is public on most meshes. Make a private one: Radio > Channels > new random key."
+        return 1
+    fi
     CH_IDX=0; CH_NAME="Primary"
     [ ${#names[@]} -eq 0 ] && return 0
     if [ ${#names[@]} -eq 1 ]; then CH_IDX=${idx[0]}; CH_NAME=${names[0]#*: }; return 0; fi
@@ -956,14 +964,37 @@ show_status() {
 #############################################################################
 
 settings_position() {
-    local r v
-    r=$(LIST_PICKER "Send position" "Every 5 min" "Every 15 min" "Every 30 min" "Every 60 min" "Manual only" "Every $((C_POS / 60)) min"); picker_ok $? || return
-    case "$r" in
-        "Every 5 min") v=300 ;; "Every 15 min") v=900 ;; "Every 30 min") v=1800 ;; "Every 60 min") v=3600 ;; *) v=0 ;;
-    esac
-    cfg_set pos_interval "$v"; load_config
-    printf '%s\n' "$C_POS" > "$RUN/pos_interval"
-    LOG green "Position: $r"
+    local r v pc pn kind every
+    while :; do
+        pc=$(cfg_get pos_chan ""); pn="nobody (off)"
+        if [ -n "$pc" ]; then
+            pn=$(awk -F'|' -v i="$pc" '$1 == i {print $2 " (" ($3 == "private" ? "own key" : "public") ")"}' "$RUN/channels" 2>/dev/null)
+            [ -n "$pn" ] || pn="channel $pc"
+        fi
+        if [ "$C_POS" -gt 0 ]; then every="Every $((C_POS / 60)) min"; else every="Manual only"; fi
+        r=$(LIST_PICKER "Send position" "Share on: $pn" "How often: $every" "< Back" "Share on: $pn"); picker_ok $? || return
+        case "$r" in
+            "Share on"*)
+                v=$(LIST_PICKER "Share position on" "Nobody (off)" "Pick a channel" "Pick a channel"); picker_ok $? || continue
+                if [ "$v" = "Nobody (off)" ]; then app_set pos_chan ""; LOG yellow "Position sharing off"; continue; fi
+                pick_channel || continue
+                kind=$(awk -F'|' -v i="$CH_IDX" '$1 == i {print $3}' "$RUN/channels" 2>/dev/null)
+                if [ "$kind" != private ]; then
+                    v=$(LIST_PICKER "$CH_NAME is public" "Share on it anyway" "Cancel" "Cancel"); picker_ok $? || continue
+                    [ "$v" = "Share on it anyway" ] || continue
+                fi
+                app_set pos_chan "$CH_IDX"; LOG green "Position shared on: $CH_NAME" ;;
+            "How often"*)
+                v=$(LIST_PICKER "Send position" "Every 5 min" "Every 15 min" "Every 30 min" "Every 60 min" "Manual only" "$every"); picker_ok $? || continue
+                case "$v" in
+                    "Every 5 min") v=300 ;; "Every 15 min") v=900 ;; "Every 30 min") v=1800 ;; "Every 60 min") v=3600 ;; *) v=0 ;;
+                esac
+                cfg_set pos_interval "$v"; load_config
+                printf '%s\n' "$C_POS" > "$RUN/pos_interval"
+                LOG green "Position interval saved" ;;
+            *) return ;;
+        esac
+    done
 }
 
 set_web_password() {
@@ -1132,12 +1163,12 @@ settings_tak() {
     local r on host port proto pos chat chan v certs
     while :; do
         on=$(cfg_get tak_on 0); host=$(cfg_get tak_host ""); proto=$(cfg_get tak_proto tcp)
-        port=$(cfg_get tak_port ""); pos=$(cfg_get tak_pos 1); chat=$(cfg_get tak_chat 1); chan=$(cfg_get tak_chan 0)
+        port=$(cfg_get tak_port ""); pos=$(cfg_get tak_pos 1); chat=$(cfg_get tak_chat 1); chan=$(cfg_get tak_chan "")
         [ -z "$port" ] && case "$proto" in tls) port=8089 ;; *) port=8087 ;; esac
         mesh_cmd bridge >/dev/null
         r=$(LIST_PICKER "Mesh <-> TAK" "Bridge: $([ "$on" = 1 ] && echo ON || echo OFF)" \
             "Server: ${host:-not set}:$port ${proto^^}" "Mesh nodes to TAK: $([ "$pos" = 1 ] && echo ON || echo OFF)" \
-            "Chat both ways: $([ "$chat" = 1 ] && echo ON || echo OFF)" "Mesh channel: $chan" "Status" "< Back" "Status")
+            "Chat both ways: $([ "$chat" = 1 ] && echo ON || echo OFF)" "Mesh channel: ${chan:-none (chat paused)}" "Status" "< Back" "Status")
         picker_ok $? || return
         case "$r" in
             Bridge:*)
@@ -1165,7 +1196,7 @@ settings_tak() {
             "Mesh nodes"*) app_set tak_pos "$([ "$pos" = 1 ] && echo 0 || echo 1)" ;;
             "Chat both"*)  app_set tak_chat "$([ "$chat" = 1 ] && echo 0 || echo 1)" ;;
             "Mesh channel"*)
-                pick_channel || continue
+                pick_channel private || continue
                 app_set tak_chan "$CH_IDX"; LOG green "Bridged channel: $CH_NAME" ;;
             Status) mesh_cmd bridge; LOG white "TAK bridge: $MESH_MSG" ;;
             *) return ;;

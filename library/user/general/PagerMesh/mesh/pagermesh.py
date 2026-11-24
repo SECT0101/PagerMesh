@@ -62,7 +62,7 @@ TRACE_TIMEOUT = 90
 # PagerMesh settings shared with payload.sh (RUN/config, key=value; payload.sh keeps them
 # in the Pager config). Changes from the web console go to RUN/cfg_req for payload.sh.
 APP_CFG = ("manual_pos", "hide_age", "dm_alert", "tak_on", "tak_proto", "tak_host", "tak_port",
-           "tak_pos", "tak_chat", "tak_chan")
+           "tak_pos", "tak_chat", "tak_chan", "pos_chan")
 
 
 def now():
@@ -553,13 +553,21 @@ class State:
         self.add_chat(entry)
         return True, "sent"
 
+    def pos_chan(self):
+        """Channel for the Pager's position, or None: nothing is shared until a channel is chosen."""
+        v = str(self.cfg.get("pos_chan", "")).strip()
+        return int(v) if v.isdigit() else None
+
     def send_position(self):
+        ch = self.pos_chan()
+        if ch is None:
+            return False, "position sharing is off - pick a channel: Settings > Send position > Share on"
         g = self.gps()
         if not g:
             return False, "no GPS fix"
         if self.link != "connected":
             return False, "not connected to meshtasticd"
-        self.queue(mp.position_packet(g[0], g[1], g[2], now(), 0, self.hop_limit,
+        self.queue(mp.position_packet(g[0], g[1], g[2], now(), ch, self.hop_limit,
                                       source=3 if self.gps_is_fix() else 1))
         with self.lock:
             self.last_pos = now()
@@ -819,7 +827,8 @@ class State:
         with self.lock:
             ch = sorted(self.channels.values(), key=lambda c: c["index"])
         write_atomic(os.path.join(self.run, "channels"),
-                     "".join("%d|%s\n" % (c["index"], clean(self.chan_label(c["index"]), 40)) for c in ch))
+                     "".join("%d|%s|%s\n" % (c["index"], clean(self.chan_label(c["index"]), 40),
+                                              "private" if str(c.get("psk_kind", "")).startswith("AES") else "public") for c in ch))
         write_atomic(os.path.join(self.run, "unread"), "%d\n" % self.unread)
         write_atomic(os.path.join(self.run, "convs"), "".join(
             "%s|%s|%d|%d|%d\n" % (v["conv"], clean(v["title"], 40), v["unread"], v["last"], v["count"])
@@ -965,8 +974,8 @@ class Service:
             b = self.s.bridge.info() if self.s.bridge else {"status": "off"}
             if not b.get("on"):
                 return True, "off"
-            return True, "%s%s - sent %d, from TAK %d" % (b["status"], (": " + b["error"]) if b.get("error") else "",
-                                                          b.get("sent", 0), b.get("received", 0))
+            return True, "%s%s - sent %d, from TAK %d - %s" % (b["status"], (": " + b["error"]) if b.get("error") else "",
+                                                               b.get("sent", 0), b.get("received", 0), b.get("chat", ""))
         if cmd == "sigint":
             st = self.s.sig.stats(self.s.name_of)
             sc = self.scan
@@ -1250,7 +1259,7 @@ class Service:
                 st.send(mp.heartbeat())
                 last_hb = t
             iv = self.pos_interval()
-            if iv > 0 and t - s.last_pos >= iv and s.gps():
+            if iv > 0 and t - s.last_pos >= iv and s.pos_chan() is not None and s.gps():
                 s.send_position()
             if s.dirty or t - last_files > 15:
                 if t - last_files >= FILES_SEC or not s.dirty:

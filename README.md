@@ -6,7 +6,7 @@
 
 A community payload that makes the **Hak5 WiFi Pineapple Pager** the screen, GPS and map for a **Meshtastic** radio (the **Glytch Mesh Mod**, a **Wi-Fi radio** such as a Heltec V3, or a **USB radio**): mesh chat, a node list with range and bearing, mesh nodes on the Pager map, the Pager's GPS position over the mesh, and a browser web console.
 
-> **Version 1.0.0.** Tested on a Pager with a Heltec radio over Wi-Fi. Reports from Glytch Mesh Mod and USB radio users are welcome: see [Testing](library/user/general/PagerMesh/README.md#-testing).
+> **Version 1.0.1.** Tested on a Pager with a Heltec radio over Wi-Fi. Reports from Glytch Mesh Mod and USB radio users are welcome: see [Testing](library/user/general/PagerMesh/README.md#-testing).
 
 **Written in DuckyScript™ + Bash (and Python standard library) for the WiFi Pineapple Pager. A community payload, not supported or guaranteed by Hak5, Meshtastic or Glytch.** See [Legal](#legal).
 

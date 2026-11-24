@@ -2,6 +2,17 @@
 
 PagerMesh versions (the payload in `library/user/general/PagerMesh`). Newest first.
 
+## 1.0.1
+- **TAK chat is only bridged to a mesh channel with its own key.** Channel 0 is public on most meshes (no key, the default key or a well-known simple key), and 1.0.0 bridged TAK *All Chat Rooms* to channel 0 by default once the bridge was on.
+  - Until you pick a private channel, bridge chat is paused both ways; node positions to TAK keep working.
+  - The Pager menu (*Mesh <-> TAK > Mesh channel*) and the web console only offer channels with their own key, and the bridge status says why chat is paused.
+  - A 1.0.0 setup still bridged to a public channel pauses chat until you pick a private one.
+- **The Pager's position is only shared once you pick a channel.** 1.0.0 broadcast it on channel 0 every 15 minutes.
+  - *Settings > Send position > Share on* and the web console (*Settings > PagerMesh*) pick the channel; *Nobody (off)* stops it. *How often* keeps the 5 / 15 / 30 / 60 min or manual choice.
+  - Any channel can be picked. A public channel (no key, the default key or a well-known simple key) asks to confirm on the Pager and shows a warning in the web console, because anyone on it can see where the Pager is.
+  - A 1.0.0 setup has no channel set, so position sharing is off until you pick one; *Send position now* says so.
+- **Web console on every address by default**, like PagerTAK: it opens from the Pager's own Wi-Fi / USB-C and from the Wi-Fi the Pager joined. *Settings > Web console > Listen on > Pager Wi-Fi / USB-C* still narrows it.
+
 ## 1.0.0
 First release.
 - **Three ways to reach the radio**: the Glytch Mesh Mod (meshtasticd on the Pager), a **Wi-Fi radio** (Meshtastic TCP API, port 4403, e.g. Heltec V3), or a **USB radio** (serial API).

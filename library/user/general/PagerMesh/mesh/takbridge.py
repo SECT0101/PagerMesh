@@ -206,13 +206,33 @@ class Bridge:
         except ValueError:
             port = 0
         try:
-            chan = int(c.get("tak_chan") or 0)
+            chan = int(c.get("tak_chan")) if str(c.get("tak_chan", "")).strip() != "" else -1
         except ValueError:
-            chan = 0
+            chan = -1
         proto = c.get("tak_proto") or "tcp"
         return {"on": c.get("tak_on") == "1", "proto": proto, "host": (c.get("tak_host") or "").strip(),
                 "port": port or {"tls": 8089, "tcp": 8087, "udp": 8087}.get(proto, 8087),
-                "pos": c.get("tak_pos", "1") == "1", "chat": c.get("tak_chat", "1") == "1", "chan": chan}
+                "pos": c.get("tak_pos", "1") == "1", "chat": c.get("tak_chat", "1") == "1" and self.chan_private(chan), "chan": chan}
+
+    def chan_private(self, idx):
+        """TAK chat is only bridged to a channel with its own AES key. No key, the default key and the
+        well-known "simple" keys can be read by anyone with Meshtastic (channel 0 is public on most meshes)."""
+        ch = self.s.channels.get(idx) if idx >= 0 else None
+        return bool(ch) and str(ch.get("psk_kind", "")).startswith("AES")
+
+    def chat_note(self):
+        c = self.cfg()
+        if c.get("tak_chat", "1") != "1":
+            return "chat off"
+        try:
+            idx = int(c.get("tak_chan")) if str(c.get("tak_chan", "")).strip() != "" else -1
+        except ValueError:
+            idx = -1
+        if idx < 0:
+            return "chat paused: pick a mesh channel with its own key"
+        if not self.chan_private(idx):
+            return "chat paused: %s is a public channel - pick one with its own key" % self.s.chan_label(idx)
+        return "chat on %s" % self.s.chan_label(idx)
 
     def cert_dir(self):
         for d in self.cert_dirs:
@@ -223,7 +243,7 @@ class Bridge:
     def info(self):
         c = self.conf()
         return {"status": self.status, "error": self.error, "sent": self.sent, "received": self.recv_n,
-                "to_mesh": self.to_mesh, "proto": c["proto"], "port": c["port"], "on": c["on"],
+                "to_mesh": self.to_mesh, "proto": c["proto"], "port": c["port"], "on": c["on"], "chat": self.chat_note(),
                 "cert": "PagerTAK certs" if "PagerTAK" in self.cert_dir() else "PagerMesh certs",
                 "has_cert": os.path.isfile(os.path.join(self.cert_dir(), "client.pem"))}
 

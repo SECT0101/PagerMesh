@@ -140,7 +140,8 @@ def state_json():
                 chat.append(dict(c))
         chat.reverse()
         me = s.me().get("user", {})
-        channels = [{"index": c["index"], "name": s.chan_label(c["index"])}
+        channels = [{"index": c["index"], "name": s.chan_label(c["index"]),
+                     "private": str(c.get("psk_kind", "")).startswith("AES")}
                     for c in sorted(s.channels.values(), key=lambda c: c["index"])]
         out = {
             "version": s.version,
@@ -229,7 +230,7 @@ def check_cfg(v):
         except ValueError:
             return "bad position"
         v["manual_pos"] = "%.6f,%.6f" % (a, b)
-    for k in ("hide_age", "tak_port", "tak_chan"):
+    for k in ("hide_age", "tak_port", "tak_chan", "pos_chan"):
         if k in v and v[k] and not v[k].isdigit():
             return "%s: enter a number" % k
     if v.get("tak_proto", "tcp") not in ("tcp", "tls", "udp"):

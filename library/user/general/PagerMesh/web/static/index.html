@@ -175,6 +175,9 @@
             <div class="setup">
               <label class="hint">Direct message alert on the Pager
                 <select id="app-dm" class="inline"><option value="sound">sound + light</option><option value="popup">sound + light + popup</option><option value="off">off (like other messages)</option></select></label>
+              <label class="hint">Share the Pager's position on
+                <select id="app-pos" class="inline"></select></label>
+              <div class="hint" id="app-pos-warn"></div>
               <div class="hint" id="app-manual"></div>
               <div class="row"><button class="btn small" type="button" id="app-clear-manual">Clear map-set location</button></div>
               <div class="hint">Click the map to set the Pager's location or drop a waypoint.</div>
@@ -192,6 +195,7 @@
               </div>
               <div class="row"><label class="hint"><input type="checkbox" id="tak-pos"> mesh nodes to TAK</label><label class="hint"><input type="checkbox" id="tak-chat"> chat both ways</label></div>
               <label class="hint">Mesh channel <select id="tak-chan" class="inline"></select></label>
+              <div class="hint">TAK chat is only bridged to a channel with its own key, never to a public channel.</div>
               <div class="hint" id="tak-cert"></div>
               <div class="row"><button class="btn small primary" type="button" id="tak-save">Save bridge</button></div>
               <div class="note" id="tak-note"></div>

@@ -1,7 +1,7 @@
 # PagerMesh – Hak5 WiFi Pineapple Pager Payload
 
 **Author:** SECT0101
-**Version:** 1.0.0
+**Version:** 1.0.1
 **Category:** General
 **Platform:** Hak5 WiFi Pineapple Pager (and a USB GPS for position) with a Meshtastic radio: the Glytch Mesh Mod, a Wi-Fi radio, or a USB radio
 **Protocol:** Meshtastic client API (TCP 4403 or USB serial), the one the phone app uses
@@ -29,7 +29,7 @@ It talks to the radio the way the Meshtastic phone app does, over one of three c
 - **Mesh chat**: send and receive on every channel the radio has; **direct messages** to any node with a *delivered* tick when the node acks; **quick messages** (Copy, WILCO, Say again, …); **conversations** (one per DM contact and one per channel, newest first, with unread counts); the **last 7 days of chat** come back when PagerMesh starts; **delete** a message, a conversation or all chats (on the Pager and in the web console; this also deletes them from the chat logs); a sound and new messages on the Pager screen; log in `/root/loot/PagerMesh/chat_YYYYMMDD.log`
 - **Node list**: every node heard, nearest first, with **range and bearing from the Pager's GPS**, battery, SNR, hops and *last heard* (`BASE 2.4km NE 87% 3m`)
 - **Map on the Pager screen**: USGS basemaps, your position, mesh nodes, nearest-nodes sidebar, chat banner, tiles cached for offline use; **Navigate to** a node shows a live arrow, range and bearing
-- **Pager GPS over the mesh**: your position is broadcast every 5 / 15 / 30 / 60 minutes (15 by default, like Meshtastic), or only when you press *Send position now*
+- **Pager GPS over the mesh**: on the channel you pick (off until you pick one; a public channel asks to confirm), every 5 / 15 / 30 / 60 minutes (15 by default, like Meshtastic), or only when you press *Send position now*
 - **Web console** in any browser on the Pager's USB / management network: map with nodes and waypoints, node table and details, chat, SIGINT, radio and bridge settings, *Send position*. Password login.
 - **Radio settings** on the Pager and in the web console: **node name**, region, modem preset, role, hop limit, position and telemetry intervals, Wi-Fi, MQTT, Bluetooth, display, power, **channels** (name, key, MQTT up/down, position precision) with a **share link and QR code**, restart. Only the fields you change are written; the radio keeps everything else. Region, preset, Wi-Fi and channel changes ask first
 - **Node tools**: details (hardware, role, last heard, position age, MQTT, favorite, packets and RSSI heard), **traceroute** with SNR per hop, **request position**, **favorites**, **hide old nodes**
@@ -120,8 +120,8 @@ Main screen:
 
 | Listen on | Address | |
 |---|---|---|
-| **Pager Wi-Fi / USB-C** (default) | `http://172.16.52.1:8585` | only devices on the Pager's own management Wi-Fi or USB-C |
-| **Same Wi-Fi as the Pager** | also `http://<Pager's address on your Wi-Fi>:8585` | any device on the network the Pager joined as a client. Anyone on that network can reach the sign-in page, so use a strong password |
+| **Same Wi-Fi as the Pager** (default) | `http://172.16.52.1:8585`, plus `http://<Pager's address on your Wi-Fi>:8585` | any device on the network the Pager joined as a client. Anyone on that network can reach the sign-in page, so use a strong password |
+| **Pager Wi-Fi / USB-C** | `http://172.16.52.1:8585` only | only devices on the Pager's own management Wi-Fi or USB-C |
 
 The Pager shows every address in *Status*, *Settings > Web console > Show address*, and when the console starts. Browser setup asks the same question first.
 
@@ -137,9 +137,10 @@ Saved with `PAYLOAD_SET_CONFIG`; the values under `# Options` in `payload.sh` ar
 
 | Setting | Default | |
 |---|---|---|
-| Send position | every 15 min | 5 / 15 / 30 / 60 min or manual only. Less often saves airtime on busy meshes |
+| Send position: share on | nobody (off) | the mesh channel for the Pager's position. A public channel (no key, the default key or a simple key) asks to confirm: anyone on it can see where the Pager is |
+| Send position: how often | every 15 min | 5 / 15 / 30 / 60 min or manual only. Less often saves airtime on busy meshes |
 | Radio connection | set on first run | Glytch Mesh Mod / Wi-Fi radio / USB radio, changed on the Pager or in the web console |
-| Web console | off | on / off, *Listen on* (Pager Wi-Fi / USB-C, or also the Wi-Fi the Pager joined), password, address |
+| Web console | off | on / off, *Listen on* (every address, or only the Pager's own Wi-Fi / USB-C), password, address |
 | Message sound | `bonus` | ringtone for new messages, or none |
 | DM alert | sound + light | direct messages: sound + light, + popup, or off |
 | Hide old nodes | show all | hide nodes not heard for 1 / 2 / 6 / 24 hours |
@@ -168,7 +169,7 @@ Raw LoRa capture (frequency scanning, LoRaTap) needs changes to the radio firmwa
 *Settings > TAK bridge* on the Pager, or the web console's *Settings > Mesh ↔ TAK bridge*:
 
 - **Mesh → TAK**: every mesh node with a position becomes a TAK contact (`PagerMesh.!nodeid`, cyan team member) with battery, SNR and hops in the remarks; resent every 5 minutes and when it moves.
-- **Chat**: text on the chosen mesh channel goes to TAK *All Chat Rooms* under the sender's name; *All Chat Rooms* messages from TAK go to that mesh channel as `[callsign] text` (at most one every 5 s). Direct messages are never bridged, in either direction.
+- **Chat**: only on a mesh channel with its own key. Channel 0 is public on most meshes (no key, the default key or a well-known simple key), so it can't be picked; until you pick a private channel, chat is paused and node positions still go to TAK. Text on the chosen channel goes to TAK *All Chat Rooms* under the sender's name; *All Chat Rooms* messages from TAK go to that mesh channel as `[callsign] text` (at most one every 5 s). Direct messages are never bridged, in either direction.
 - **TLS** (8089) needs `client.pem` (certificate and key, unencrypted PEM) and ideally `ca.pem` in `PagerMesh/certs/`, and `openssl` (`opkg install openssl-util`). If PagerTAK is installed and has its certificates, PagerMesh uses those. **TCP** (8087) needs nothing; **UDP** sends only.
 
 ---
@@ -190,7 +191,7 @@ Raw LoRa capture (frequency scanning, LoRaTap) needs changes to the radio firmwa
 - `payload.sh` reads the Pager GPS (`GPS_GET`, `gpspipe`), runs the menus, and hands commands to the service through `/tmp/pagermesh/outbox`.
 - `map/` is PagerTAK's Pager map viewer and pure-Python screen driver.
 
-Position packets are sent as `POSITION_APP` broadcasts with the Pager GPS fix (location source *external*). Direct messages ask for an ack, like the phone app.
+Position packets are sent as `POSITION_APP` broadcasts on the chosen channel with the Pager GPS fix (location source *external*). Direct messages ask for an ack, like the phone app.
 
 ---
 
@@ -222,7 +223,7 @@ No radio? `tools/fake_meshtasticd.py` in the repository simulates meshtasticd wi
 | Region not set | *Settings > Radio settings > Region* on the Pager, the web console's *Radio settings*, or the phone app |
 | No nodes | Give it a few minutes outdoors; check region and channel match your mesh |
 | Phone app keeps disconnecting | Exit PagerMesh while you use the phone app, then report it (see *Testing*) |
-| Can't open the web console from my home Wi-Fi | *Settings > Web console > Listen on > Same Wi-Fi as the Pager*, or use the Pager's own Wi-Fi / USB-C at `172.16.52.1` |
+| Can't open the web console from my home Wi-Fi | Check *Settings > Web console* is on and *Listen on* is *Same Wi-Fi as the Pager* (the default from 1.0.1), or use the Pager's own Wi-Fi / USB-C at `172.16.52.1` |
 | Messages from one radio never arrive | Another app (phone over Bluetooth, a browser, a gateway) may be connected to the same radio and take them; disconnect it. `tail -40 /tmp/pagermesh/packets.log` shows every packet PagerMesh gets |
 | Radio settings: *not connected to the radio* | The radio is restarting after a change; wait a few seconds |
 | TAK bridge: *no client.pem* | Put `client.pem` (and `ca.pem`) in `PagerMesh/certs/`, or use TCP 8087 |

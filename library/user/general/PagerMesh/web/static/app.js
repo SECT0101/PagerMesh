@@ -670,10 +670,26 @@ $("chan-share").onclick = async () => {
 function drawApp() {
   const c = S.cfg || {};
   if (document.activeElement !== $("app-dm")) $("app-dm").value = c.dm_alert || "sound";
+  const ps = $("app-pos");
+  if (document.activeElement !== ps) {
+    ps.innerHTML = "";
+    const off = el("option", "", "nobody (position not shared)"); off.value = ""; ps.appendChild(off);
+    for (const ch of S.channels) {
+      const o = el("option", "", ch.index + ": " + ch.name + (ch.private ? " (own key)" : " (public key)"));
+      o.value = ch.index; ps.appendChild(o);
+    }
+    ps.value = c.pos_chan || "";
+  }
+  posWarn();
   const mp = manualPos();
   $("app-manual").textContent = mp ? "Location set on the map: " + mp[0].toFixed(5) + ", " + mp[1].toFixed(5) + " (used when the Pager has no GPS fix)" : "No map-set location.";
   $("app-clear-manual").disabled = !mp;
 }
+function posWarn() {
+  const v = $("app-pos").value, ch = (S.channels || []).find(x => String(x.index) === v);
+  $("app-pos-warn").textContent = ch && !ch.private ? ch.name + " is a public channel: anyone on it can see where the Pager is." : "";
+}
+$("app-pos").onchange = async () => { posWarn(); const { ok, j } = await post("/api/cfg", { pos_chan: $("app-pos").value }); note("app-note", ok ? "Saved" : j.message, !ok); };
 $("app-dm").onchange = async () => { const { ok, j } = await post("/api/cfg", { dm_alert: $("app-dm").value }); note("app-note", ok ? "Saved" : j.message, !ok); };
 $("app-clear-manual").onclick = clearManual;
 function drawTakForm() {
@@ -685,22 +701,26 @@ function drawTakForm() {
   $("tak-pos").checked = (c.tak_pos || "1") === "1";
   $("tak-chat").checked = (c.tak_chat || "1") === "1";
   const sel = $("tak-chan"); sel.innerHTML = "";
-  for (const ch of S.channels) { const o = el("option", "", ch.index + ": " + ch.name); o.value = ch.index; sel.appendChild(o); }
-  sel.value = c.tak_chan || "0";
+  const none = el("option", "", "none (chat paused)"); none.value = ""; sel.appendChild(none);
+  for (const ch of S.channels) {
+    const o = el("option", "", ch.index + ": " + ch.name + (ch.private ? " (own key)" : " (public key - not allowed)"));
+    o.value = ch.index; o.disabled = !ch.private; sel.appendChild(o);
+  }
+  sel.value = c.tak_chan || "";
   drawTakStatus();
 }
 function drawTakStatus() {
   const b = S.bridge || {};
   $("tak-status").textContent = b.on ? "(" + b.status + ")" : "(off)";
   if (!b.on) $("tak-cert").textContent = "";
-  else $("tak-cert").textContent = "Status: " + b.status + (b.error ? " - " + b.error : "") + " · sent " + (b.sent || 0) + ", from TAK " + (b.received || 0) +
+  else $("tak-cert").textContent = "Status: " + b.status + (b.error ? " - " + b.error : "") + (b.chat ? " · " + b.chat : "") + " · sent " + (b.sent || 0) + ", from TAK " + (b.received || 0) +
     ", to mesh " + (b.to_mesh || 0) + (b.proto === "tls" ? " · " + (b.has_cert ? "certificate: " + b.cert : "no client.pem yet (certs/ folder, see README)") : "");
 }
 $("tak-proto").onchange = () => { $("tak-port").placeholder = $("tak-proto").value === "tls" ? "8089" : "8087"; };
 $("tak-save").onclick = async () => {
   const body = { tak_on: $("tak-on").checked ? "1" : "0", tak_proto: $("tak-proto").value, tak_host: $("tak-host").value.trim(),
     tak_port: $("tak-port").value || ($("tak-proto").value === "tls" ? "8089" : "8087"), tak_pos: $("tak-pos").checked ? "1" : "0",
-    tak_chat: $("tak-chat").checked ? "1" : "0", tak_chan: $("tak-chan").value || "0" };
+    tak_chat: $("tak-chat").checked ? "1" : "0", tak_chan: $("tak-chan").value };
   if (body.tak_on === "1" && !body.tak_host) { note("tak-note", "Enter the TAK server address", true); return; }
   const { ok, j } = await post("/api/cfg", body);
   note("tak-note", ok ? "Saved - the bridge reconnects" : j.message, !ok);
